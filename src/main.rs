@@ -185,7 +185,6 @@ fn aes_encrypt_hardware(input: &[u8; 16], key: &[u8; 16]) -> [u8; 16] {
         block = (a0, a1, a2, a3);
     }
 
-    let mut state = [0u8; 16];
     state[0..4].copy_from_slice(&block.0.to_le_bytes());
     state[4..8].copy_from_slice(&block.1.to_le_bytes());
     state[8..12].copy_from_slice(&block.2.to_le_bytes());
