@@ -122,7 +122,7 @@ fn key_expansion(key: &[u8; 16]) -> [u8; 176] {
     round_keys
 }
 
-fn aes_encrypt(input: &[u8; 16], key: &[u8; 16]) -> [u8; 16] {
+fn aes_encrypt_software(input: &[u8; 16], key: &[u8; 16]) -> [u8; 16] {
     let mut state = *input;
     let round_keys = key_expansion(key);
 
@@ -160,7 +160,7 @@ fn main() {
         0xaa,
     ];
 
-    let encrypted = aes_encrypt(&plaintext, &key);
+    let encrypted = aes_encrypt_software(&plaintext, &key);
 
     assert_eq!(encrypted, expected_output);
 }
