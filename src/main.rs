@@ -142,6 +142,72 @@ fn aes_encrypt_software(input: &[u8; 16], key: &[u8; 16]) -> [u8; 16] {
     state
 }
 
+fn aes_encrypt_hardware(input: &[u8; 16], key: &[u8; 16]) -> [u8; 16] {
+    let mut state = *input;
+    let round_keys = key_expansion(key);
+
+    add_round_key(&mut state, &round_keys[..16]);
+
+    let mut block = (
+        u32::from_le_bytes(state[0..4].try_into().unwrap()),
+        u32::from_le_bytes(state[4..8].try_into().unwrap()),
+        u32::from_le_bytes(state[8..12].try_into().unwrap()),
+        u32::from_le_bytes(state[12..16].try_into().unwrap()),
+    );
+
+    for round in 1..10 {
+        let rk = &round_keys[round * 16..(round + 1) * 16];
+        let mut a0 = u32::from_le_bytes(rk[0..4].try_into().unwrap());
+        let mut a1 = u32::from_le_bytes(rk[4..8].try_into().unwrap());
+        let mut a2 = u32::from_le_bytes(rk[8..12].try_into().unwrap());
+        let mut a3 = u32::from_le_bytes(rk[12..16].try_into().unwrap());
+
+        a0 = aes32esmi(a0, block.0, 0);
+        a0 = aes32esmi(a0, block.1, 1);
+        a0 = aes32esmi(a0, block.2, 2);
+        a0 = aes32esmi(a0, block.3, 3);
+
+        a1 = aes32esmi(a1, block.1, 0);
+        a1 = aes32esmi(a1, block.2, 1);
+        a1 = aes32esmi(a1, block.3, 2);
+        a1 = aes32esmi(a1, block.0, 3);
+
+        a2 = aes32esmi(a2, block.2, 0);
+        a2 = aes32esmi(a2, block.3, 1);
+        a2 = aes32esmi(a2, block.0, 2);
+        a2 = aes32esmi(a2, block.1, 3);
+
+        a3 = aes32esmi(a3, block.3, 0);
+        a3 = aes32esmi(a3, block.0, 1);
+        a3 = aes32esmi(a3, block.1, 2);
+        a3 = aes32esmi(a3, block.2, 3);
+
+        block = (a0, a1, a2, a3);
+    }
+
+    let mut state = [0u8; 16];
+    state[0..4].copy_from_slice(&block.0.to_le_bytes());
+    state[4..8].copy_from_slice(&block.1.to_le_bytes());
+    state[8..12].copy_from_slice(&block.2.to_le_bytes());
+    state[12..16].copy_from_slice(&block.3.to_le_bytes());
+
+    sub_bytes(&mut state);
+    shift_rows(&mut state);
+    add_round_key(&mut state, &round_keys[160..]);
+
+    state
+}
+
+/// rs1: round key state, rs2: plaintext
+/// output: round key state
+fn aes32esmi(rs1: u32, rs2: u32, bs: u8) -> u32 {
+    let shamt = (bs & 0x03) * 8;
+    let si = (rs2 >> shamt) & 0xFF;
+    let so = SBOX[si as usize];
+    let mixed = u32::from_be_bytes([gf_mul(so, 0x03), so, so, gf_mul(so, 0x02)]);
+    rs1 ^ mixed.rotate_left(shamt.into())
+}
+
 fn main() {
     // Key: cese4040password
     let key: [u8; 16] = [
@@ -161,6 +227,10 @@ fn main() {
     ];
 
     let encrypted = aes_encrypt_software(&plaintext, &key);
+
+    assert_eq!(encrypted, expected_output);
+
+    let encrypted = aes_encrypt_hardware(&plaintext, &key);
 
     assert_eq!(encrypted, expected_output);
 }
